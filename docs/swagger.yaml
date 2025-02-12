@@ -1,0 +1,53 @@
+definitions:
+  handler.APIResult:
+    properties:
+      code:
+        type: string
+      data: {}
+      message:
+        type: string
+      meta: {}
+    type: object
+info:
+  contact: {}
+paths:
+  /messages:
+    get:
+      description: Fetches all sent messages from the database.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.APIResult'
+      summary: Retrieve sent messages
+      tags:
+      - Message
+  /start:
+    get:
+      description: Starts the background process that handles messages.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.APIResult'
+      summary: Start message processing
+      tags:
+      - Message
+  /stop:
+    get:
+      description: Stops the message processing Goroutine.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.APIResult'
+      summary: Stop message processing
+      tags:
+      - Message
+swagger: "2.0"

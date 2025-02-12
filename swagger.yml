@@ -1,0 +1,54 @@
+swagger: "2.0"
+info:
+  version: "1.0.0"
+  title: "Message Processing API"
+  description: "API for starting, stopping, and retrieving messages."
+schemes:
+  - http
+host: localhost:8080
+basePath: /
+paths:
+  /start:
+    get:
+      summary: "Start message processing"
+      description: "Starts the background process that handles messages."
+      responses:
+        200:
+          description: "Message processing started"
+          schema:
+            $ref: "#/definitions/APIResult"
+  /stop:
+    get:
+      summary: "Stop message processing"
+      description: "Stops the message processing Goroutine."
+      responses:
+        200:
+          description: "Message processing stopped"
+          schema:
+            $ref: "#/definitions/APIResult"
+  /messages:
+    get:
+      summary: "Retrieve sent messages"
+      description: "Fetches all sent messages from the database."
+      responses:
+        200:
+          description: "List of sent messages"
+          schema:
+            $ref: "#/definitions/APIResult"
+definitions:
+  APIResult:
+    type: "object"
+    properties:
+      code:
+        type: "string"
+      message:
+        type: "string"
+      data:
+        type: "array"
+  APIError:
+    type: "object"
+    properties:
+      code:
+        type: "string"
+      message:
+        type: "string"
