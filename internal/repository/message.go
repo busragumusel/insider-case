@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"context"
 	"github.com/busragumusel/insider-case/internal/entity"
 	"gorm.io/gorm"
 )
@@ -10,18 +11,22 @@ type MessageRepository struct {
 }
 
 type MessageRepo interface {
-	GetByStatus(status string, limit int) ([]entity.Message, error)
-	Update(id uint, status string) error
+	GetByStatus(ctx context.Context, status string, limit int) ([]entity.Message, error)
+	Update(ctx context.Context, id uint, status string) error
 }
 
 func NewMessageRepository(DB *gorm.DB) *MessageRepository {
 	return &MessageRepository{DB}
 }
 
-func (r *MessageRepository) GetByStatus(status string, limit int) ([]entity.Message, error) {
+func (r *MessageRepository) GetByStatus(
+	ctx context.Context,
+	status string,
+	limit int,
+) ([]entity.Message, error) {
 	var messages []entity.Message
 
-	db := r.DB
+	db := r.DB.WithContext(ctx)
 
 	if status != "" {
 		db = db.Where("status = ?", status)
@@ -35,8 +40,9 @@ func (r *MessageRepository) GetByStatus(status string, limit int) ([]entity.Mess
 	return messages, err
 }
 
-func (r *MessageRepository) Update(id uint, status string) error {
-	err := r.DB.Model(&entity.Message{}).
+func (r *MessageRepository) Update(ctx context.Context, id uint, status string) error {
+	err := r.DB.WithContext(ctx).
+		Model(&entity.Message{}).
 		Where("id = ?", id).
 		Updates(map[string]interface{}{
 			"status":  status,

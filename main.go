@@ -45,7 +45,7 @@ func initDB() {
 	fmt.Println("Connected to PostgreSQL and migrated schema")
 }
 
-func initRedis() {
+func initRedis() *redis.Client {
 	redisHost := os.Getenv("REDIS_HOST")
 	redisPort := os.Getenv("REDIS_PORT")
 	redisPassword := os.Getenv("REDIS_PASSWORD")
@@ -69,29 +69,34 @@ func initRedis() {
 	}
 
 	log.Println("Redis is connected!")
+
+	return client
 }
 
 func main() {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	err := godotenv.Load()
 	if err != nil {
 		log.Println("no .env file found, using system environment variables")
 	}
 
 	initDB()
-	initRedis()
+	redisClient := initRedis()
 
 	router := chi.NewRouter()
 	router.Use(middleware.Logger)
 	router.Use(middleware.Recoverer)
 	router.Get("/swagger/*", httpSwagger.WrapHandler)
 
-	messageRouter := api.NewAPI(db)
+	messageRouter := api.NewAPI(db, redisClient)
 	messageRouter.RegisterRoutes(router)
 
 	messageRepo := repository.NewMessageRepository(db)
 	stopChan := make(chan bool)
-	messageService := service.NewMessageService(messageRepo, stopChan)
-	go messageService.StartProcess()
+	messageService := service.NewMessageService(messageRepo, stopChan, redisClient)
+	go messageService.StartProcess(ctx)
 
 	err = http.ListenAndServe(":8080", router)
 	if err != nil {

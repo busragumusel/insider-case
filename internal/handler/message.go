@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"github.com/busragumusel/insider-case/internal/service"
 	"net/http"
@@ -30,8 +31,11 @@ func writeJSONResponse(w http.ResponseWriter, statusCode int, response interface
 // @Produce json
 // @Success 200 {object} APIResult
 // @Router /start [get]
-func (r *MessageHandler) StartProcess(w http.ResponseWriter, r2 *http.Request) {
-	go r.service.StartProcess()
+func (r *MessageHandler) StartProcess(w http.ResponseWriter, req *http.Request) {
+	ctx, cancel := context.WithCancel(req.Context())
+	defer cancel()
+
+	go r.service.StartProcess(ctx)
 	writeJSONResponse(w, http.StatusOK, nil)
 }
 
@@ -42,8 +46,11 @@ func (r *MessageHandler) StartProcess(w http.ResponseWriter, r2 *http.Request) {
 // @Produce json
 // @Success 200 {object} APIResult
 // @Router /stop [get]
-func (r *MessageHandler) StopProcess(w http.ResponseWriter, r2 *http.Request) {
-	r.service.StopProcess()
+func (r *MessageHandler) StopProcess(w http.ResponseWriter, req *http.Request) {
+	ctx, cancel := context.WithCancel(req.Context())
+	defer cancel()
+
+	r.service.StopProcess(ctx)
 	writeJSONResponse(w, http.StatusOK, nil)
 }
 
@@ -52,12 +59,16 @@ func (r *MessageHandler) StopProcess(w http.ResponseWriter, r2 *http.Request) {
 // @Description Fetches all sent messages from the database.
 // @Tags Message
 // @Produce json
+// @Param status query string false "Message status filter" default(sent)
 // @Success 200 {object} APIResult
 // @Router /messages [get]
 func (r *MessageHandler) Retrieve(w http.ResponseWriter, req *http.Request) {
-	status := req.URL.Query().Get("status") // ✅ Get `status` from query params
+	ctx, cancel := context.WithCancel(req.Context())
+	defer cancel()
 
-	messages, err := r.service.Retrieve(status)
+	status := req.URL.Query().Get("status")
+
+	messages, err := r.service.Retrieve(ctx, status)
 	if err != nil {
 		writeJSONResponse(w, http.StatusInternalServerError, APIError{
 			Message: "Failed to fetch messages",

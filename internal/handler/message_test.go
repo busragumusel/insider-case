@@ -1,26 +1,40 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"github.com/busragumusel/insider-case/internal/entity"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
 
 type mockMessageService struct{}
 
-func (m *mockMessageService) StartProcess() {}
+func (m *mockMessageService) StartProcess(_ context.Context) {}
 
-func (m *mockMessageService) StopProcess() {}
+func (m *mockMessageService) StopProcess(_ context.Context) {}
 
-func (m *mockMessageService) Retrieve() ([]entity.Message, error) {
+func (m *mockMessageService) Retrieve(_ context.Context, status string) ([]entity.Message, error) {
 	return []entity.Message{
 		{
 			ID:          1,
 			PhoneNumber: "+90532434532",
+			Content:     "Test Message",
+			Status:      status,
+			CreatedAt:   time.Now().Add(-10 * time.Minute),
+			SentAt:      time.Time{}, // Default zero time (not sent yet)
+		},
+		{
+			ID:          2,
+			PhoneNumber: "+905551111111",
+			Content:     "Another Test",
+			Status:      status,
+			CreatedAt:   time.Now().Add(-5 * time.Minute),
+			SentAt:      time.Now(),
 		},
 	}, nil
 }

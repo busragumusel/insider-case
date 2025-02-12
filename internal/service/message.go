@@ -2,11 +2,13 @@ package service
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"github.com/busragumusel/insider-case/internal/entity"
 	"github.com/busragumusel/insider-case/internal/model"
 	"github.com/busragumusel/insider-case/internal/repository"
+	"github.com/go-redis/redis/v8"
 	"log"
 	"net/http"
 	"os"
@@ -19,27 +21,30 @@ const (
 )
 
 type MessageSvc interface {
-	StartProcess()
-	StopProcess()
-	Retrieve(status string) ([]entity.Message, error)
+	StartProcess(ctx context.Context)
+	StopProcess(ctx context.Context)
+	Retrieve(ctx context.Context, status string) ([]entity.Message, error)
 }
 
 type MessageService struct {
-	repo     repository.MessageRepo
-	stopChan chan bool
+	repo        repository.MessageRepo
+	stopChan    chan bool
+	redisClient *redis.Client
 }
 
 func NewMessageService(
 	repo repository.MessageRepo,
 	stopChan chan bool,
+	redisClient *redis.Client,
 ) *MessageService {
 	return &MessageService{
 		repo,
 		stopChan,
+		redisClient,
 	}
 }
 
-func (s *MessageService) StartProcess() {
+func (s *MessageService) StartProcess(ctx context.Context) {
 	ticker := time.NewTicker(processTimeRange * time.Minute)
 
 	go func() {
@@ -48,7 +53,7 @@ func (s *MessageService) StartProcess() {
 		for {
 			select {
 			case <-ticker.C:
-				if err := s.process(); err != nil {
+				if err := s.process(ctx); err != nil {
 					log.Println("Error processing messages:", err)
 				}
 			case <-s.stopChan:
@@ -59,13 +64,13 @@ func (s *MessageService) StartProcess() {
 	}()
 }
 
-func (s *MessageService) StopProcess() {
+func (s *MessageService) StopProcess(_ context.Context) {
 	close(s.stopChan)
 	log.Println("Process stopped.")
 }
 
-func (s *MessageService) Retrieve(status string) ([]entity.Message, error) {
-	messages, err := s.repo.GetByStatus(status, 1000)
+func (s *MessageService) Retrieve(ctx context.Context, status string) ([]entity.Message, error) {
+	messages, err := s.repo.GetByStatus(ctx, status, 1000)
 	if err != nil {
 		return nil, errors.New("failed to retrieve sent messages")
 	}
@@ -73,8 +78,8 @@ func (s *MessageService) Retrieve(status string) ([]entity.Message, error) {
 	return messages, nil
 }
 
-func (s *MessageService) process() error {
-	messages, err := s.repo.GetByStatus(entity.StatusPending, messageCountPerMinute)
+func (s *MessageService) process(ctx context.Context) error {
+	messages, err := s.repo.GetByStatus(ctx, entity.StatusPending, messageCountPerMinute)
 	if err != nil {
 		return errors.New("error occurred when getting messages")
 	}
@@ -85,7 +90,7 @@ func (s *MessageService) process() error {
 	}
 
 	for _, msg := range messages {
-		res, err := s.sendToWebhook(model.Payload{
+		res, err := s.sendToWebhook(ctx, model.Payload{
 			To:      msg.PhoneNumber,
 			Content: msg.Content,
 		})
@@ -96,7 +101,7 @@ func (s *MessageService) process() error {
 
 		log.Printf("messageID: %s", res.MessageID)
 
-		err = s.repo.Update(msg.ID, entity.StatusSent)
+		err = s.repo.Update(ctx, msg.ID, entity.StatusSent)
 		if err != nil {
 			log.Printf("Failed to update message with ID %d: %v", msg.ID, err)
 		}
@@ -106,7 +111,7 @@ func (s *MessageService) process() error {
 	return nil
 }
 
-func (s *MessageService) sendToWebhook(payload model.Payload) (model.Response, error) {
+func (s *MessageService) sendToWebhook(ctx context.Context, payload model.Payload) (model.Response, error) {
 	jsonData, err := json.Marshal(payload)
 	if err != nil {
 		return model.Response{}, err
@@ -137,5 +142,18 @@ func (s *MessageService) sendToWebhook(payload model.Payload) (model.Response, e
 		return model.Response{}, err
 	}
 
+	s.saveToCache(ctx, response)
+
 	return response, nil
+}
+
+func (s *MessageService) saveToCache(ctx context.Context, response model.Response) {
+	sendingTime := time.Now().Format(time.RFC3339)
+	key := "message_id:" + response.MessageID
+	err := s.redisClient.HSet(ctx, key, map[string]interface{}{
+		"sending_time": sendingTime,
+	}).Err()
+	if err != nil {
+		log.Printf("failed to cache: %v", err)
+	}
 }

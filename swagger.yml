@@ -30,6 +30,13 @@ paths:
     get:
       summary: "Retrieve sent messages"
       description: "Fetches all sent messages from the database."
+      parameters:
+        - in: query
+          name: status
+          type: string
+          required: false
+          description: "Filter messages by status"
+          default: "sent"
       responses:
         200:
           description: "List of sent messages"
