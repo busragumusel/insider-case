@@ -2,7 +2,6 @@ package api
 
 import (
 	"github.com/busragumusel/insider-case/internal/handler"
-	"github.com/busragumusel/insider-case/internal/repository"
 	"github.com/busragumusel/insider-case/internal/service"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-redis/redis/v8"
@@ -10,27 +9,25 @@ import (
 )
 
 type API struct {
-	db          *gorm.DB
-	redisClient *redis.Client
+	db             *gorm.DB
+	redisClient    *redis.Client
+	messageService *service.MessageService
 }
 
 func NewAPI(
 	db *gorm.DB,
 	redisClient *redis.Client,
+	messageService *service.MessageService,
 ) *API {
 	return &API{
-		db:          db,
-		redisClient: redisClient,
+		db:             db,
+		redisClient:    redisClient,
+		messageService: messageService,
 	}
 }
 
 func (r *API) RegisterRoutes(router *chi.Mux) {
-	messageRepository := repository.NewMessageRepository(r.db)
-
-	stopChan := make(chan bool)
-	messageService := service.NewMessageService(messageRepository, stopChan, r.redisClient)
-
-	messageHandler := handler.NewMessageHandler(messageService)
+	messageHandler := handler.NewMessageHandler(r.messageService)
 
 	router.Get("/start", messageHandler.StartProcess)
 	router.Get("/stop", messageHandler.StopProcess)

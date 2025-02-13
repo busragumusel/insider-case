@@ -16,7 +16,7 @@ type mockMessageService struct{}
 
 func (m *mockMessageService) StartProcess(_ context.Context) {}
 
-func (m *mockMessageService) StopProcess(_ context.Context) {}
+func (m *mockMessageService) StopProcess() {}
 
 func (m *mockMessageService) Retrieve(_ context.Context, status string) ([]entity.Message, error) {
 	return []entity.Message{

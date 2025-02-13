@@ -32,10 +32,7 @@ func writeJSONResponse(w http.ResponseWriter, statusCode int, response interface
 // @Success 200 {object} APIResult
 // @Router /start [get]
 func (r *MessageHandler) StartProcess(w http.ResponseWriter, req *http.Request) {
-	ctx, cancel := context.WithCancel(req.Context())
-	defer cancel()
-
-	go r.service.StartProcess(ctx)
+	go r.service.StartProcess(context.Background())
 	writeJSONResponse(w, http.StatusOK, nil)
 }
 
@@ -47,10 +44,7 @@ func (r *MessageHandler) StartProcess(w http.ResponseWriter, req *http.Request) 
 // @Success 200 {object} APIResult
 // @Router /stop [get]
 func (r *MessageHandler) StopProcess(w http.ResponseWriter, req *http.Request) {
-	ctx, cancel := context.WithCancel(req.Context())
-	defer cancel()
-
-	r.service.StopProcess(ctx)
+	r.service.StopProcess()
 	writeJSONResponse(w, http.StatusOK, nil)
 }
 

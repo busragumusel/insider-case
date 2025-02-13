@@ -18,6 +18,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"sync"
 )
 
 var db *gorm.DB
@@ -90,13 +91,14 @@ func main() {
 	router.Use(middleware.Recoverer)
 	router.Get("/swagger/*", httpSwagger.WrapHandler)
 
-	messageRouter := api.NewAPI(db, redisClient)
-	messageRouter.RegisterRoutes(router)
-
 	messageRepo := repository.NewMessageRepository(db)
-	stopChan := make(chan bool)
-	messageService := service.NewMessageService(messageRepo, stopChan, redisClient)
+	stopChan := make(chan bool, 1)
+	var mu *sync.Mutex
+	messageService := service.NewMessageService(messageRepo, stopChan, redisClient, mu, false)
 	go messageService.StartProcess(ctx)
+
+	messageRouter := api.NewAPI(db, redisClient, messageService)
+	messageRouter.RegisterRoutes(router)
 
 	err = http.ListenAndServe(":8080", router)
 	if err != nil {

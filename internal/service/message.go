@@ -12,6 +12,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"sync"
 	"time"
 )
 
@@ -22,7 +23,7 @@ const (
 
 type MessageSvc interface {
 	StartProcess(ctx context.Context)
-	StopProcess(ctx context.Context)
+	StopProcess()
 	Retrieve(ctx context.Context, status string) ([]entity.Message, error)
 }
 
@@ -30,25 +31,56 @@ type MessageService struct {
 	repo        repository.MessageRepo
 	stopChan    chan bool
 	redisClient *redis.Client
+	mu          *sync.Mutex
+	running     bool
 }
 
 func NewMessageService(
 	repo repository.MessageRepo,
 	stopChan chan bool,
 	redisClient *redis.Client,
+	mu *sync.Mutex,
+	running bool,
 ) *MessageService {
+	if mu == nil {
+		mu = &sync.Mutex{}
+	}
+
 	return &MessageService{
 		repo,
 		stopChan,
 		redisClient,
+		mu,
+		running,
 	}
 }
 
 func (s *MessageService) StartProcess(ctx context.Context) {
+	s.mu.Lock()
+	if s.running {
+		s.mu.Unlock()
+		log.Println("Process is already running.")
+		return
+	}
+
+	if s.stopChan == nil {
+		s.stopChan = make(chan bool, 1)
+	}
+
+	s.running = true
+	s.mu.Unlock()
+
 	ticker := time.NewTicker(processTimeRange * time.Minute)
 
 	go func() {
-		defer ticker.Stop()
+		defer func() {
+			ticker.Stop()
+			s.mu.Lock()
+			s.running = false
+			s.mu.Unlock()
+		}()
+
+		log.Println("Message processing started.")
 
 		for {
 			select {
@@ -59,14 +91,24 @@ func (s *MessageService) StartProcess(ctx context.Context) {
 			case <-s.stopChan:
 				log.Println("Stopping process...")
 				return
+			case <-ctx.Done():
+				log.Println("Received shutdown signal, stopping process...")
+				return
 			}
 		}
 	}()
 }
 
-func (s *MessageService) StopProcess(_ context.Context) {
-	close(s.stopChan)
-	log.Println("Process stopped.")
+func (s *MessageService) StopProcess() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	select {
+	case s.stopChan <- true:
+		log.Println("Stop signal sent.")
+	default:
+		log.Println("Process already stopped.")
+	}
 }
 
 func (s *MessageService) Retrieve(ctx context.Context, status string) ([]entity.Message, error) {
